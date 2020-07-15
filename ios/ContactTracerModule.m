@@ -95,17 +95,21 @@ RCT_EXPORT_METHOD(initialize: (RCTPromiseResolveBlock)resolve
         resolve(@(true));
         
     if (locationManager == nil) {  //Added by Urng 20200712
-        locationManager = [[CLLocationManager alloc] init];  //Added by Urng 20200712
-        locationManager.delegate = self;  //Added by Urng 20200712
-        if ([locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)])  //Added by Urng 20200712
-        {
-          [locationManager requestWhenInUseAuthorization]; //Added by Urng 20200712
-          [locationManager requestAlwaysAuthorization];  //Added by Urng 20200712
-        }
-        
-        
-        // Callback will be called in locationManager delegate //Added by Urng 20200712
-        pendingCallback = true;  //Added by Urng 20200712
+        __strong typeof(self) strongSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+           // do work here
+            strongSelf->locationManager = [[CLLocationManager alloc] init];  //Added by Urng 20200712
+            strongSelf->locationManager.delegate = strongSelf;  //Added by Urng 20200712
+            if ([strongSelf->locationManager respondsToSelector:@selector(requestAlwaysAuthorization)])  //Added by Urng 20200712
+            {
+              //[locationManager requestWhenInUseAuthorization]; //Added by Urng 20200712
+              [strongSelf->locationManager requestAlwaysAuthorization];  //Added by Urng 20200712
+            }
+            
+            
+            // Callback will be called in locationManager delegate //Added by Urng 20200712
+            //pendingCallback = true;  //Added by Urng 20200712
+        });
     }
     
     // Resolve now since there would be no delegate called  //Added by Urng 20200712
@@ -367,7 +371,7 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
     if (locationManager == nil)  //Added by Urng 20200712
         return;                  //Added by Urng 20200712
     NSLog(@"Start Scanning Beacon");  //Added by Urng 20200712
-    [locationManager startMonitoringForRegion:beaconRegion];  //Added by Urng 20200712
+    [locationManager startRangingBeaconsInRegion:beaconRegion];  //Added by Urng 20200712
 }
 
 - (void) stopScanning
@@ -380,7 +384,7 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
     if (locationManager == nil)  //Added by Urng 20200712
         return;                  //Added by Urng 20200712
     NSLog(@"Stop Scanning Beacon"); //Added by Urng 20200712
-    [locationManager stopMonitoringForRegion:beaconRegion];  //Added by Urng 20200712
+    [locationManager stopRangingBeaconsInRegion:beaconRegion];  //Added by Urng 20200712
     
 }
 
