@@ -11,15 +11,21 @@
 #import <React/RCTEventEmitter.h>
 
 @import CoreBluetooth;
+@import CoreLocation; //Added by Urng 20200712
 
 @implementation ContactTracerModule {
     CBCentralManager* centralManager;
     CBPeripheralManager* peripheralManager;
     RCTPromiseResolveBlock bluetoothOnResolve;
+    CLLocationManager* locationManager; //Added by Urng 20200712
     BOOL isBluetoothOn;
     
     CBUUID* cbuuid;
     CBUUID* kDataClass;
+    
+    NSUUID *beaconuuid; //Added by Urng 20200712
+    NSString *beaconID; //Added by Urng 20200712
+    CLBeaconRegion *beaconRegion; //Added by Urng 20200712
 }
 
 RCT_EXPORT_MODULE()
@@ -30,17 +36,30 @@ RCT_EXPORT_MODULE()
     
     centralManager = nil;
     peripheralManager = nil;
+    locationManager = nil; //Added by Urng 20200712
     
     NSString *bluetoothUUID = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"contact_tracer_bluetooth_uuid"];
+    NSString *beaconUUID = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"beacon_uuid"];
     if (bluetoothUUID == nil)
-        bluetoothUUID = @"00008FFF-0000-1000-8000-00805f9b34fb";
-    
+        bluetoothUUID = @"00008FFF-0000-1000-8000-00805f9b34fc";
+        
+    if (beaconUUID == nil) { //Added by Urng 20200712
+        beaconUUID = @"26600EFA-ED3D-971A-3676-295C85BE6CE5"; //Added by Urng 20200712
+        beaconID = @"morchana.in.th";  //Added by Urng 20200712
+    } //Added by Urng 20200712
+        
     NSString *bluetoothDataClass = [[bluetoothUUID substringWithRange:NSMakeRange(4, 4)] uppercaseString];
 
     cbuuid = [CBUUID UUIDWithString:bluetoothUUID];
+    beaconuuid = [[NSUUID alloc] initWithUUIDString:beaconUUID]; //Added by Urng 20200712
+    
     kDataClass = [CBUUID UUIDWithString:bluetoothDataClass];
 
     isBluetoothOn = false;
+    
+    beaconRegion = [[CLBeaconRegion alloc] initWithProximityUUID:beaconuuid //Added by Urng 20200712
+                                        identifier:beaconID]; //Added by Urng 20200712
+    
     
     return self;
 }
@@ -74,6 +93,25 @@ RCT_EXPORT_METHOD(initialize: (RCTPromiseResolveBlock)resolve
     // Resolve now since there would be no delegate called
     if (!pendingCallback)
         resolve(@(true));
+        
+    if (locationManager == nil) {  //Added by Urng 20200712
+        locationManager = [[CLLocationManager alloc] init];  //Added by Urng 20200712
+        locationManager.delegate = self;  //Added by Urng 20200712
+        if ([locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)])  //Added by Urng 20200712
+        {
+          [locationManager requestWhenInUseAuthorization]; //Added by Urng 20200712
+          [locationManager requestAlwaysAuthorization];  //Added by Urng 20200712
+        }
+        
+        
+        // Callback will be called in locationManager delegate //Added by Urng 20200712
+        pendingCallback = true;  //Added by Urng 20200712
+    }
+    
+    // Resolve now since there would be no delegate called  //Added by Urng 20200712
+    if (!pendingCallback)  //Added by Urng 20200712
+        resolve(@(true));  //Added by Urng 20200712
+        
 }
 
 RCT_EXPORT_METHOD(isTracerServiceEnabled: (RCTPromiseResolveBlock)resolve
@@ -208,6 +246,7 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
     if (adData == nil)
         return;
     
+//    NSLog(@"adData: %@",adData);
     NSString* nearbyDeviceUserId;
     
     NSData* data = [adData objectForKey:kDataClass];
@@ -252,6 +291,44 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
     }
 }
 
+
+- (void)locationManager:(CLLocationManager*)manager didEnterRegion:(CLRegion*)region  //Added by Urng 20200712
+{
+    NSLog(@"Enter Region!");
+    [locationManager startRangingBeaconsInRegion:beaconRegion];
+}
+ 
+-(void)locationManager:(CLLocationManager*)manager didExitRegion:(CLRegion*)region  //Added by Urng 20200712
+{
+    [locationManager stopRangingBeaconsInRegion:beaconRegion];
+    NSLog(@"No Beacon Found!");
+}
+
+- (void)locationManager:(CLLocationManager *)manager rangingBeaconsDidFailForRegion:(CLBeaconRegion *)region  withError:(NSError *)error //Added by Urng 20200712
+{
+//    NSLog(@"RangingBeaconsDidFailForRegion: %@", region);
+//    NSLog(@"error: %@", error);
+}
+
+-(void)locationManager:(CLLocationManager*)manager
+       didRangeBeacons:(NSArray*)beacons
+              inRegion:(CLBeaconRegion*)region //Added by Urng 20200712
+{
+    // Beacon found!
+    
+    CLBeacon *foundBeacon = [beacons firstObject];
+    
+    NSString *uuid = foundBeacon.proximityUUID.UUIDString;
+    NSString *major = [NSString stringWithFormat:@"%@", foundBeacon.major];
+    NSString *minor = [NSString stringWithFormat:@"%@", foundBeacon.minor];
+    
+    NSLog(@"Beacon Found!");
+    NSLog(@"uuid: %@", uuid);
+    NSLog(@"major: %@", major);
+    NSLog(@"minor: %@", minor);
+}
+
+
 // Advertiser
 
 - (void) startAdvertising
@@ -286,6 +363,11 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
         return;
     [self emitAdvertiserMessage:@"Start Scanning for Nearby Device\n"];
     [centralManager scanForPeripheralsWithServices:@[cbuuid] options:nil];
+    
+    if (locationManager == nil)  //Added by Urng 20200712
+        return;                  //Added by Urng 20200712
+    NSLog(@"Start Scanning Beacon");  //Added by Urng 20200712
+    [locationManager startMonitoringForRegion:beaconRegion];  //Added by Urng 20200712
 }
 
 - (void) stopScanning
@@ -294,6 +376,12 @@ RCT_EXPORT_METHOD(getUserId: (RCTPromiseResolveBlock)resolve
         return;
     [self emitAdvertiserMessage:@"Stop Scanning for Nearby Device\n"];
     [centralManager stopScan];
+    
+    if (locationManager == nil)  //Added by Urng 20200712
+        return;                  //Added by Urng 20200712
+    NSLog(@"Stop Scanning Beacon"); //Added by Urng 20200712
+    [locationManager stopMonitoringForRegion:beaconRegion];  //Added by Urng 20200712
+    
 }
 
 // Event
